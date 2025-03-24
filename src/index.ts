@@ -15,15 +15,9 @@ interface CardKey {
 export interface Env {
   DB: D1Database;
 }
-// 修改 CORS 配置，使用更具体的源
-const corsHeaders = {
-  "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Credentials": "true",
-}
 
-function handleOptions(request) {
+
+function handleOptions(request: Request) {
   // 使用请求中的 Origin
   const origin = request.headers.get("Origin") || "*";
   
