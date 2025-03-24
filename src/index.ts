@@ -37,7 +37,7 @@ export default {
                 (first_used_at + ${24 * 60 * 60}) as expires_at 
          FROM card_keys 
          WHERE key_code = ? 
-         AND (first_used_at IS NULL OR first_used_at + ${24 * 60 * 60} > strftime('%s', 'now'))`
+         AND (first_used_at IS NULL OR first_used_at + ${24 * 60 * 60} - strftime('%s', 'now'))>0`
       ).bind(cardKey).first<CardKey>();
 
       if (!result) {
