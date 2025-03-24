@@ -64,11 +64,16 @@ export default {
 
       if (!result) {
         console.log(`卡密验证失败: ${cardKey} - 无效或已过期`);
-        return Response.json({ 
-          valid: false, 
+        return new Response(JSON.stringify({
+          valid: false,
           code: 'INVALID_CARD',
-          message: "卡密无效或已过期" 
-        });
+          message: "卡密无效或已过期"
+        }), {
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          }
+        })
       }
 
       // 获取当前时间戳
@@ -83,11 +88,16 @@ export default {
         
         if (now > expiresAt) {
           console.log(`卡密已过期: ${cardKey}, 过期时间: ${new Date(expiresAt * 1000).toISOString()}`);
-          return Response.json({
+          return new Response(JSON.stringify({
             valid: false,
             code: 'CARD_EXPIRED',
             message: "卡密已过期"
-          });
+          }), {
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            }
+          })
         }
         
         // 生成短期会话（剩余时间）
@@ -102,7 +112,8 @@ export default {
         }), {
           headers: { 
             "Content-Type": "application/json",
-            "Set-Cookie": `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${remainingTime}`
+            "Set-Cookie": `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${remainingTime}`,
+            ...corsHeaders,
           }
         });
       }
@@ -128,7 +139,8 @@ export default {
       }), {
         headers: { 
           "Content-Type": "application/json",
-          "Set-Cookie": `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${expiresIn}`
+          "Set-Cookie": `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${expiresIn}`,
+          ...corsHeaders,
         }
       });
 
@@ -136,21 +148,30 @@ export default {
       if (error instanceof z.ZodError) {
         const errorDetails = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
         console.error(`输入验证错误: ${errorDetails}`);
-        return Response.json({
+        return new Response(JSON.stringify({
           valid: false,
           code: 'INVALID_INPUT',
-          message: `卡密格式错误: ${errorDetails}`
-        }, { status: 400 });
+          message:`卡密格式错误: ${errorDetails}`
+        }), {
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          }
+        })
       }
       
       console.error(`服务器错误: ${error instanceof Error ? error.message : String(error)}`);
       console.error(`错误详情: ${error instanceof Error && error.stack ? error.stack : '无堆栈信息'}`);
-      
-      return Response.json({ 
+      return new Response(JSON.stringify({
         valid: false,
         code: 'SERVER_ERROR',
-        message: `验证过程中发生错误: ${error instanceof Error ? error.message : String(error)}` 
-      }, { status: 500 });
+        message:`验证过程中发生错误: ${error instanceof Error ? error.message : String(error)}` 
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        }
+      });
     }
   }
 };
