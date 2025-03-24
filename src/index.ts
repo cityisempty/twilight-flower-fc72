@@ -93,7 +93,7 @@ export default {
          SET is_used = TRUE, 
              first_used_at = ?
          WHERE key_code = ?`
-      ).bind(now, now + expiresIn, cardKey) // 24小时有效期
+      ).bind(now, cardKey) // 24小时有效期
       .run();
 
       return new Response(JSON.stringify({ 
