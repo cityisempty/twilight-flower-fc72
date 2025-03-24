@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 const CardValidationSchema = z.object({
-  cardKey: z.string().length(16).regex(/^[A-Z0-9]+$/)
+  cardKey: z.string().regex(/^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$/, 
+    "卡密格式错误，正确格式应为：XXXXX-XXXXX-XXXXX-XXXXX-XXXXX")
 });
 
 interface CardKey {
@@ -27,6 +28,9 @@ export default {
       
       const db = env.DB;
 
+      // 添加更多调试信息
+      console.log(`正在验证卡密: ${cardKey}`);
+
       const result = await db.prepare(
         `SELECT * FROM card_keys 
          WHERE card_key = ? 
@@ -34,6 +38,7 @@ export default {
       ).bind(cardKey).first<CardKey>();
 
       if (!result) {
+        console.log(`卡密验证失败: ${cardKey} - 无效或已过期`);
         return Response.json({ 
           valid: false, 
           code: 'INVALID_CARD',
@@ -46,6 +51,7 @@ export default {
 
       if (result.is_used) {
         if (now > result.expires_at) {
+          console.log(`卡密已过期: ${cardKey}, 过期时间: ${new Date(result.expires_at * 1000).toISOString()}`);
           return Response.json({
             valid: false,
             code: 'CARD_EXPIRED',
@@ -57,6 +63,7 @@ export default {
         const remainingTime = result.expires_at - now;
         sessionToken = crypto.randomUUID();
         
+        console.log(`续期会话: ${cardKey}, 剩余时间: ${remainingTime}秒`);
         return new Response(JSON.stringify({ 
           valid: true,
           code: 'SESSION_RENEWED',
@@ -69,40 +76,50 @@ export default {
         });
       }
 
-      // 首次激活
+      // 首次激活 - 设置为24小时有效期
+      const expiresIn = 24 * 60 * 60; // 24小时的秒数
       sessionToken = crypto.randomUUID();
+      
+      console.log(`首次激活卡密: ${cardKey}, 有效期至: ${new Date((now + expiresIn) * 1000).toISOString()}`);
+      
       await db.prepare(
         `UPDATE card_keys 
          SET is_used = TRUE, 
              activated_at = ?,
              expires_at = ? 
          WHERE card_key = ?`
-      ).bind(now, now + (24 * 60 * 60), cardKey) // 30天有效期
+      ).bind(now, now + expiresIn, cardKey) // 24小时有效期
       .run();
 
       return new Response(JSON.stringify({ 
         valid: true,
         code: 'ACTIVATION_SUCCESS',
-        expires_in: 2592000 // 30天秒数
+        expires_in: expiresIn // 24小时秒数
       }), {
         headers: { 
           "Content-Type": "application/json",
-          "Set-Cookie": `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`
+          "Set-Cookie": `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${expiresIn}`
         }
       });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
+        const errorDetails = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+        console.error(`输入验证错误: ${errorDetails}`);
         return Response.json({
           valid: false,
           code: 'INVALID_INPUT',
-          message: "卡密格式错误（必须为16位大写字母和数字）"
+          message: `卡密格式错误: ${errorDetails}`
         }, { status: 400 });
       }
+      
+      console.error(`服务器错误: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`错误详情: ${error instanceof Error && error.stack ? error.stack : '无堆栈信息'}`);
+      
       return Response.json({ 
         valid: false,
         code: 'SERVER_ERROR',
-        message: "验证过程中发生错误" 
+        message: `验证过程中发生错误: ${error instanceof Error ? error.message : String(error)}` 
       }, { status: 500 });
     }
   }
