@@ -15,13 +15,35 @@ interface CardKey {
 export interface Env {
   DB: D1Database;
 }
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+}
+
+function handleOptions(request) {
+  if (request.headers.get("Origin") !== null &&
+    request.headers.get("Access-Control-Request-Method") !== null &&
+    request.headers.get("Access-Control-Request-Headers") !== null) {
+    // Handle CORS pre-flight request.
+    return new Response(null, {
+      headers: corsHeaders
+    })
+  } else {
+    // Handle standard OPTIONS request.
+    return new Response(null, {
+      headers: {
+        "Allow": "GET, HEAD, POST, OPTIONS",
+      }
+    })
+  }
+}
 
 export default {
   async fetch(request: Request, env: Env) {
-    if (request.method !== "POST") {
-      return new Response("请使用POST方法", { status: 405 });
-    }
-    
+    if (request.method === "OPTIONS") {
+      return handleOptions(request)
+    }    
     try {
       const data = await request.json();
       const { cardKey } = CardValidationSchema.parse(data);
