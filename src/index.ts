@@ -15,25 +15,37 @@ interface CardKey {
 export interface Env {
   DB: D1Database;
 }
+// 修改 CORS 配置，使用更具体的源
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
+  "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Credentials": "true",
 }
 
 function handleOptions(request) {
+  // 使用请求中的 Origin
+  const origin = request.headers.get("Origin") || "*";
+  
   if (request.headers.get("Origin") !== null &&
     request.headers.get("Access-Control-Request-Method") !== null &&
     request.headers.get("Access-Control-Request-Headers") !== null) {
     // Handle CORS pre-flight request.
     return new Response(null, {
-      headers: corsHeaders
+      headers: {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": request.headers.get("Access-Control-Request-Headers") || "Content-Type",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Max-Age": "86400",
+      }
     })
   } else {
     // Handle standard OPTIONS request.
     return new Response(null, {
       headers: {
-        "Allow": "GET, HEAD, POST, OPTIONS",
+        "Allow": "POST, OPTIONS",
+        "Access-Control-Allow-Origin": origin,
       }
     })
   }
@@ -41,9 +53,27 @@ function handleOptions(request) {
 
 export default {
   async fetch(request: Request, env: Env) {
+    // 获取请求的 Origin
+    const origin = request.headers.get("Origin") || "*";
+    // 更新 corsHeaders 以使用动态 Origin
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Credentials": "true",
+    };
+    
     if (request.method === "OPTIONS") {
-      return handleOptions(request)
-    }    
+      return handleOptions(request);
+    }
+    
+    if (request.method !== "POST") {
+      return new Response("请使用POST方法", { 
+        status: 405,
+        headers: corsHeaders
+      });
+    }
+    
     try {
       const data = await request.json();
       const { cardKey } = CardValidationSchema.parse(data);
