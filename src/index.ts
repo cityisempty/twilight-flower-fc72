@@ -31,10 +31,13 @@ export default {
       // 添加更多调试信息
       console.log(`正在验证卡密: ${cardKey}`);
 
+      // 修改查询，使用first_used_at字段计算过期时间
       const result = await db.prepare(
-        `SELECT * FROM card_keys 
-         WHERE card_key = ? 
-         AND expires_at > strftime('%s', 'now')`
+        `SELECT *, 
+                (first_used_at + ${24 * 60 * 60}) as expires_at 
+         FROM card_keys 
+         WHERE key_code = ? 
+         AND (first_used_at IS NULL OR first_used_at + ${24 * 60 * 60} > strftime('%s', 'now'))`
       ).bind(cardKey).first<CardKey>();
 
       if (!result) {
@@ -50,8 +53,11 @@ export default {
       let sessionToken = null;
 
       if (result.is_used) {
-        if (now > result.expires_at) {
-          console.log(`卡密已过期: ${cardKey}, 过期时间: ${new Date(result.expires_at * 1000).toISOString()}`);
+        // 计算过期时间 = 首次使用时间 + 24小时
+        const expiresAt = result.first_used_at + (24 * 60 * 60);
+        
+        if (now > expiresAt) {
+          console.log(`卡密已过期: ${cardKey}, 过期时间: ${new Date(expiresAt * 1000).toISOString()}`);
           return Response.json({
             valid: false,
             code: 'CARD_EXPIRED',
@@ -60,7 +66,7 @@ export default {
         }
         
         // 生成短期会话（剩余时间）
-        const remainingTime = result.expires_at - now;
+        const remainingTime = expiresAt - now;
         sessionToken = crypto.randomUUID();
         
         console.log(`续期会话: ${cardKey}, 剩余时间: ${remainingTime}秒`);
@@ -85,9 +91,8 @@ export default {
       await db.prepare(
         `UPDATE card_keys 
          SET is_used = TRUE, 
-             activated_at = ?,
-             expires_at = ? 
-         WHERE card_key = ?`
+             first_used_at = ?
+         WHERE key_code = ?`
       ).bind(now, now + expiresIn, cardKey) // 24小时有效期
       .run();
 
