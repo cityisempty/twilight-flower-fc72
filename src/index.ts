@@ -31,7 +31,7 @@ export default {
       // 添加更多调试信息
       console.log(`正在验证卡密: ${cardKey}`);
 
-      // 修改查询，使用first_used_at字段计算过期时间
+      // 使用数据库时间函数进行查询
       const result = await db.prepare(
         `SELECT *, 
                 (first_used_at + ${24 * 60 * 60}) as expires_at 
@@ -49,9 +49,12 @@ export default {
         });
       }
 
-      const now = Math.floor(Date.now() / 1000);
+      // 获取当前时间戳
+      const currentTimeResult = await db.prepare("SELECT strftime('%s', 'now') as current_time").first<{current_time: string}>();
+      const now = parseInt(currentTimeResult?.current_time || '0', 10);
+      
       let sessionToken = null;
-
+      
       if (result.is_used) {
         // 计算过期时间 = 首次使用时间 + 24小时
         const expiresAt = result.first_used_at + (24 * 60 * 60);
@@ -90,10 +93,10 @@ export default {
       
       await db.prepare(
         `UPDATE card_keys 
-         SET is_used = TRUE, 
-             first_used_at = ?
+         SET is_used = 1, 
+             first_used_at = strftime('%s', 'now')
          WHERE key_code = ?`
-      ).bind(now, cardKey) // 24小时有效期
+      ).bind(cardKey) // 使用数据库时间函数
       .run();
 
       return new Response(JSON.stringify({ 
